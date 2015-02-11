@@ -3,8 +3,9 @@ Data Visualization of AKB48 Groups
 
 In this visualization of AKB48 Group members, the 48_homes.html map takes the count of the number of members from each prefecture.
 Map is made using D3.
+Part of assignment 3 in INFX 589 E Winter 2015.
 
- 
+ # References
  Original D3.js code and topojson geographic data of japan from https://github.com/dataofjapan/land
  
  AKB48 data scraped from AKPedia, http://48pedia.org/

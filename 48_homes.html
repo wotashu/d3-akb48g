@@ -2,18 +2,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Map of home prefectures AKB48 Group</title>
+<title>Map of home prefectures AKB48</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
-
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
-<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
 
 <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
 <script src="http://d3js.org/queue.v1.min.js" charset="utf-8"></script>
 <script src="http://d3js.org/topojson.v1.min.js" charset="utf-8"></script>
 <script src="http://d3js.org/colorbrewer.v1.min.js"></script>
 <script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
-<script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
 
 <style>
 .my-legend .legend-title {
@@ -83,7 +80,7 @@
   stroke-linejoin: round;
 }
 .d3-tip {
-  line-height: 2;
+  line-height: 1;
   font-weight: bold;
   padding: 10px;
   background: rgba(0, 0, 0, 0.8);
@@ -147,6 +144,8 @@
 </style>
 </head>
 <body>
+
+
 <div class="container-fluid">
   <div class="row">
 
@@ -174,7 +173,16 @@
   <div id="map"></div>
 </div>
 <script>
+ /*
+ Original D3.js code and topojson geographic data of japan from https://github.com/dataofjapan/land
+ AKB48 data scraped from AKPedia, http://48pedia.org/
+ Legend from Mapbox, https://www.mapbox.com/tilemill/docs/guides/advanced-legends/
+ Mousewheel-zoom + click-to-center from http://bl.ocks.org/mbostock/2206340
+ Hover tips from https://github.com/Caged/d3-tip
+ Responsive map from http://eyeseast.github.io/visible-data/2013/08/26/responsive-d3/
+ Responsive layout from Bootstrap http://getbootstrap.com/
 
+ */
     var margin = {top: 10, left: 10, bottom: 10, right: 10}
       , width = parseInt(d3.select('#map').style('width'))
       , width = width - margin.left - margin.right
@@ -189,22 +197,31 @@
       .scale(width)
       .translate([width / 2, height / 2]);
 
-    var color = d3.scale.log()
-          .domain([0,1,4,8,  45])
+      var color = d3.scale.log()
+          .domain([0,1,4,8, 30,  45])
           .range(colorbrewer.PuRd[5]);
+
+      var x = d3.scale.linear()
+          .domain([0, 50])
+          .range([0, 240]);
+
+      var xAxis = d3.svg.axis()
+          .scale(x)
+          .orient("bottom")
+          .tickSize(13)
+          .tickValues(color.domain());
 
     var path = d3.geo.path()
         .projection(projection);
 
     var svg = d3.select("#map").append("svg")
         .attr("width", width)
-        .attr("height", height)
-        .on("click", stopped, true);;
+        .attr("height", height);
 
     var prefectures = svg.append("g")
         .attr("id", "nam")
 
-    var zoom = d3.behavior.zoom()
+      var zoom = d3.behavior.zoom()
             .translate([0, 0])
             .scale(1)
             .scaleExtent([1, 8])
@@ -214,13 +231,20 @@
       .attr('class', 'd3-tip')
       .offset([-10, 0])
       .html(function(d) {
-        return d.properties.nam + '<br />' + 'Number of Members: ' + d.properties.count + '<br />' + 'Average Age: ' + d.properties.age;
+        return d.properties.nam + '<br />' + 'Number of Members: ' + d.properties.count;
       });
     svg.call(tip);
 
+    var zoom = d3.behavior.zoom()
+        .translate(projection.translate())
+        .scale(projection.scale())
+        .scaleExtent([height, 8 * height])
+        .on("zoom", zoomed);
+
     var g = svg.append("g")
         .attr("class", "key")
-        .attr("transform", "translate(40,40)");
+        .attr("transform", "translate(40,40)")
+        .call(zoom);;
 
     g.selectAll("rect")
         .data(color.range().map(function(d, i) {
@@ -272,67 +296,25 @@
     }
 
     function clicked(d) {
-      var x, y, k;
+      var centroid = path.centroid(d),
+          translate = projection.translate();
 
-      if (d && centered !== d) {
-        var centroid = path.centroid(d);
-        x = centroid[0];
-        y = centroid[1];
-        k = 4;
-        centered = d;
-      } else {
-        x = width / 2;
-        y = height / 2;
-        k = 1;
-        centered = null;
-      }
+      projection.translate([
+        translate[0] - centroid[0] + width / 2,
+        translate[1] - centroid[1] + height / 2
+      ]);
 
-      g.selectAll("path")
-          .classed("active", centered && function(d) { return d === centered; });
+      zoom.translate(projection.translate());
 
-      g.transition()
-          .duration(750)
-          .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")")
-          .style("stroke-width", 1.5 / k + "px");
-    }
-
-    function clicked(d) {
-      if (active.node() === this) return reset();
-        active.classed("active", false);
-        active = d3.select(this).classed("active", true);
-
-      var bounds = path.bounds(d),
-        dx = bounds[1][0] - bounds[0][0],
-        dy = bounds[1][1] - bounds[0][1],
-        x = (bounds[0][0] + bounds[1][0]) / 2,
-        y = (bounds[0][1] + bounds[1][1]) / 2,
-        scale = .9 / Math.max(dx / width, dy / height),
-        translate = [width / 2 - scale * x, height / 2 - scale * y];
-
-      svg.transition()
-        .duration(750)
-        .call(zoom.translate(translate).scale(scale).event);
-      }
-
-    function reset() {
-      active.classed("active", false);
-      active = d3.select(null);
-
-      svg.transition()
-          .duration(750)
-          .call(zoom.translate([0, 0]).scale(1).event);
+      g.selectAll("path").transition()
+          .duration(700)
+          .attr("d", path);
     }
 
     function zoomed() {
-      g.style("stroke-width", 1.5 / d3.event.scale + "px");
-      g.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+      projection.translate(d3.event.translate).scale(d3.event.scale);
+      g.selectAll("path").attr("d", path);
     }
-
-// If the drag behavior prevents the default click,
-// also stop propagation so we don’t click-to-zoom.
-function stopped() {
-  if (d3.event.defaultPrevented) d3.event.stopPropagation();
-}
 
 
 

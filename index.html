@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map of home prefectures AKB48</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="http://d3js.org/queue.v1.min.js" charset="utf-8"></script>
+<script src="http://d3js.org/topojson.v1.min.js" charset="utf-8"></script>
+<script src="http://d3js.org/colorbrewer.v1.min.js"></script>
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+
+<style>
+.my-legend .legend-title {
+   text-align: left;
+   margin-bottom: 8px;
+   font-weight: bold;
+   font-size: 90%;
+   }
+ .my-legend .legend-scale ul {
+   margin: 0;
+   padding: 0;
+   float: left;
+   list-style: none;
+   }
+ .my-legend .legend-scale ul li {
+   display: block;
+   float: left;
+   width: 50px;
+   margin-bottom: 6px;
+   text-align: center;
+   font-size: 80%;
+   list-style: none;
+   }
+ .my-legend ul.legend-labels li span {
+   display: block;
+   float: left;
+   height: 15px;
+   width: 50px;
+   }
+ .my-legend .legend-source {
+   font-size: 70%;
+   color: #999;
+   clear: both;
+   }
+ .my-legend a {
+   color: #777;
+   }
+
+
+.background {
+  fill: none;
+  pointer-events: all;
+}
+
+.feature {
+  fill: #ccc;
+  cursor: pointer;
+}
+
+.feature.active {
+  fill: orange;
+}
+
+.prefecture {
+  fill: #eee;
+}
+
+.prefecture-border {
+  fill: none;
+  stroke: #FFF;
+}
+
+.mesh {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+  font-size: 10px;
+}
+.d3-tip:after {
+  box-sizing: border-box;
+  display: inline;
+  font-size: 10px;
+  width: 100%;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.8);
+  content: "\25BC";
+  position: absolute;
+  text-align: center;
+}
+
+.d3-tip.n:after {
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+}
+.PuRd .q0-5{fill:rgb(241,238,246)}
+.PuRd .q1-5{fill:rgb(215,181,216)}
+.PuRd .q2-5{fill:rgb(223,101,176)}
+.PuRd .q3-5{fill:rgb(221,28,119)}
+.PuRd .q4-5{fill:rgb(152,0,67)}
+
+#map {
+  width: 800px;
+  height: 500px;
+}
+
+.info {
+  padding: 6px 8px;
+  font: 14px/16px Arial, Helvetica, sans-serif;
+  background: white;
+  background: rgba(255,255,255,0.8);
+  box-shadow: 0 0 15px rgba(0,0,0,0.2);
+  border-radius: 5px;
+}
+.info h4 {
+  margin: 0 0 5px;
+  color: #777;
+}
+
+.legend {
+  text-align: left;
+  line-height: 18px;
+  color: #555;
+}
+.legend i {
+  width: 18px;
+  height: 18px;
+  float: left;
+  margin-right: 8px;
+  opacity: 0.7;
+}
+</style>
+</head>
+<body>
+
+
+<div class="container-fluid">
+  <div class="row">
+
+
+  <div>
+    <h1>INFX 589 Winter: Information Visualization</h1>
+    <p>
+      Jonathan Lin
+    </p>
+  </div>
+  <div class='my-legend'>
+  <div class='legend-title'>AKB48 Group Members by Home Prefecture</div>
+    <div class='legend-scale'>
+      <ul class='legend-labels'>
+        <li><span style='background:#f1eef6;'></span>0</li>
+        <li><span style='background:#d7b5d8;'></span></li>
+        <li><span style='background:#df65b0;'></span></li>
+        <li><span style='background:#dd1c77;'></span></li>
+        <li><span style='background:#980043;'></span>45</li>
+       </ul>
+      </div>
+    <div class='legend-source'>Source: <a href="http://48pedia.org/">48pedia</a></div>
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+<script>
+ /*
+ Original D3.js code and topojson geographic data of japan from https://github.com/dataofjapan/land
+ AKB48 data scraped from AKPedia, http://48pedia.org/
+ Legend from Mapbox, https://www.mapbox.com/tilemill/docs/guides/advanced-legends/
+ Mousewheel-zoom + click-to-center from http://bl.ocks.org/mbostock/2206340
+ Hover tips from https://github.com/Caged/d3-tip
+ Responsive map from http://eyeseast.github.io/visible-data/2013/08/26/responsive-d3/
+ Responsive layout from Bootstrap http://getbootstrap.com/
+
+ */
+    var margin = {top: 10, left: 10, bottom: 10, right: 10}
+      , width = parseInt(d3.select('#map').style('width'))
+      , width = width - margin.left - margin.right
+      , mapRatio = .5
+      , height = width * mapRatio
+      , centered
+      , active = d3.select(null);;
+    var tip;
+
+    var projection = d3.geo.mercator()
+      .center([139.883565, 36.565725])
+      .scale(width)
+      .translate([width / 2, height / 2]);
+
+      var color = d3.scale.log()
+          .domain([0,1,4,8, 30,  45])
+          .range(colorbrewer.PuRd[5]);
+
+      var x = d3.scale.linear()
+          .domain([0, 50])
+          .range([0, 240]);
+
+      var xAxis = d3.svg.axis()
+          .scale(x)
+          .orient("bottom")
+          .tickSize(13)
+          .tickValues(color.domain());
+
+    var path = d3.geo.path()
+        .projection(projection);
+
+    var svg = d3.select("#map").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    var prefectures = svg.append("g")
+        .attr("id", "nam")
+
+      var zoom = d3.behavior.zoom()
+            .translate([0, 0])
+            .scale(1)
+            .scaleExtent([1, 8])
+            .on("zoom", zoomed);
+
+    tip = d3.tip()
+      .attr('class', 'd3-tip')
+      .offset([-10, 0])
+      .html(function(d) {
+        return d.properties.nam + '<br />' + 'Number of Members: ' + d.properties.count;
+      });
+    svg.call(tip);
+
+    var zoom = d3.behavior.zoom()
+        .translate(projection.translate())
+        .scale(projection.scale())
+        .scaleExtent([height, 8 * height])
+        .on("zoom", zoomed);
+
+    var g = svg.append("g")
+        .attr("class", "key")
+        .attr("transform", "translate(40,40)")
+        .call(zoom);;
+
+    g.selectAll("rect")
+        .data(color.range().map(function(d, i) {
+          return {
+            x0: i ? x(color.domain()[i - 1]) : x.range()[0],
+            x1: i < color.domain().length ? x(color.domain()[i]) : x.range()[1],
+            z: d
+          };
+        }))
+
+    d3.json("48japan.json", function(error, _topojson) {
+      g.selectAll("path")
+          .data(topojson.feature(_topojson, _topojson.objects.japan).features)
+        .enter().append("path")
+          .attr("d", path)
+          .attr("class", "feature")
+          .style("fill", function(d) { return color(d.properties.count = d.properties.count); })
+          .on('mouseover', tip.show)
+          .on('mouseout', tip.hide)
+          .on("click", clicked);
+
+      g.append("path")
+          .datum(topojson.mesh(_topojson, _topojson.objects.japan, function(a, b) { return a !== b; }))
+          .attr("class", "mesh")
+          .attr("d", path);
+    });
+
+    d3.select(window).on('resize', resize);
+
+    function resize() {
+        // adjust things when the window size changes
+        width = parseInt(d3.select('#map').style('width'));
+        width = width - margin.left - margin.right;
+        height = width * mapRatio;
+
+        // update projection
+        projection
+            .translate([width / 2, height / 2])
+            .scale(width);
+
+        // resize the map container
+        map
+            .style('width', width + 'px')
+            .style('height', height + 'px');
+
+        // resize the map
+        map.select('.land').attr('d', path);
+        map.selectAll('.state').attr('d', path);
+    }
+
+    function clicked(d) {
+      var centroid = path.centroid(d),
+          translate = projection.translate();
+
+      projection.translate([
+        translate[0] - centroid[0] + width / 2,
+        translate[1] - centroid[1] + height / 2
+      ]);
+
+      zoom.translate(projection.translate());
+
+      g.selectAll("path").transition()
+          .duration(700)
+          .attr("d", path);
+    }
+
+    function zoomed() {
+      projection.translate(d3.event.translate).scale(d3.event.scale);
+      g.selectAll("path").attr("d", path);
+    }
+
+
+
+</script>
+<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+</body>
+</html>
